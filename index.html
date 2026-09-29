@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Class Registration</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #eef2ff, #f8fafc 55%, #e0f2fe);
+      color: #172033;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .form-card {
+      width: min(100%, 440px);
+      padding: 40px;
+      border: 1px solid #e7eaf2;
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: 0 20px 60px rgba(39, 55, 99, 0.12);
+    }
+
+    .eyebrow {
+      color: #5c6ac4;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 10px 0 8px;
+      font-size: clamp(1.8rem, 6vw, 2.2rem);
+    }
+
+    .intro {
+      margin: 0 0 28px;
+      color: #687386;
+      line-height: 1.5;
+    }
+
+    .field {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #30394b;
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 13px 14px;
+      border: 1px solid #d7dce7;
+      border-radius: 10px;
+      background: #fbfcfe;
+      color: #172033;
+      font: inherit;
+      outline: none;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    input::placeholder {
+      color: #a0a8b7;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: #5c6ac4;
+      box-shadow: 0 0 0 3px rgba(92, 106, 196, 0.15);
+    }
+
+    button {
+      width: 100%;
+      margin-top: 4px;
+      padding: 14px;
+      border: 0;
+      border-radius: 10px;
+      background: #5c6ac4;
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 160ms ease, transform 160ms ease;
+    }
+
+    button:hover {
+      background: #4c59ad;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .back-link {
+      display: inline-block;
+      color: #4c59ad;
+      font-weight: 600;
+    }
+
+    .document-preview-section {
+      margin: 24px 0;
+    }
+
+    .document-preview-section h2 {
+      margin: 0 0 10px;
+      font-size: 1.2rem;
+    }
+
+    .document-preview {
+      display: block;
+      width: 100%;
+      height: min(65vh, 680px);
+      margin-top: 12px;
+      border: 1px solid #e7eaf2;
+      border-radius: 10px;
+      background: #f8fafc;
+    }
+
+    .login-icon {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: grid;
+      width: 46px;
+      height: 46px;
+      place-items: center;
+      border: 1px solid #e7eaf2;
+      border-radius: 50%;
+      background: #fff;
+      color: #4c59ad;
+      box-shadow: 0 4px 14px rgba(39, 55, 99, 0.12);
+      cursor: pointer;
+    }
+
+    .login-icon:hover {
+      background: #f4f5ff;
+    }
+
+    .login-icon svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .login-dialog {
+      width: min( calc(100% - 32px), 400px);
+      padding: 32px;
+      border: 1px solid #e7eaf2;
+      border-radius: 18px;
+      color: #172033;
+      box-shadow: 0 20px 60px rgba(39, 55, 99, 0.2);
+    }
+
+    .login-dialog::backdrop {
+      background: rgba(23, 32, 51, 0.42);
+    }
+
+    .login-dialog h2 {
+      margin: 0 0 8px;
+    }
+
+    .login-dialog .intro {
+      margin-bottom: 20px;
+    }
+
+    .login-dialog button[type="submit"] {
+      margin-top: 8px;
+    }
+
+    .login-dialog .login-close {
+      width: auto;
+      margin: 14px 0 0;
+      padding: 0;
+      background: transparent;
+      color: #4c59ad;
+      font-weight: 600;
+    }
+
+    .login-message {
+      min-height: 1.4em;
+      margin: 14px 0 0;
+      color: #34745a;
+      font-size: 0.92rem;
+    }
+
+    .login-message.error {
+      color: #b42318;
+    }
+
+    .chat-launcher {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      z-index: 2;
+      width: auto;
+      margin: 0;
+      padding: 13px 18px;
+      border-radius: 999px;
+      box-shadow: 0 6px 20px rgba(39, 55, 99, 0.2);
+    }
+
+    .chat-panel {
+      position: fixed;
+      right: 20px;
+      bottom: 82px;
+      z-index: 2;
+      display: none;
+      width: min(360px, calc(100vw - 32px));
+      padding: 20px;
+      border: 1px solid #e7eaf2;
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 12px 36px rgba(39, 55, 99, 0.2);
+    }
+
+    .chat-panel.is-open {
+      display: block;
+    }
+
+    .chat-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .chat-panel h2 {
+      margin: 0;
+      font-size: 1.25rem;
+    }
+
+    .chat-panel .chat-close {
+      width: 32px;
+      height: 32px;
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      color: #4c59ad;
+      font-size: 1.4rem;
+    }
+
+    .chat-panel .chat-change {
+      width: auto;
+      margin: 8px 0 0;
+      padding: 0;
+      background: transparent;
+      color: #4c59ad;
+      font-size: 0.85rem;
+      text-align: left;
+    }
+
+    .chat-panel .intro {
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+    }
+
+    .chat-panel .field {
+      margin-bottom: 12px;
+    }
+
+    .chat-history {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 240px;
+      margin: 0 0 12px;
+      overflow-y: auto;
+    }
+
+    .chat-message {
+      max-width: 85%;
+      margin: 0;
+      padding: 9px 12px;
+      border-radius: 12px;
+      background: #f0f2fb;
+      overflow-wrap: anywhere;
+      font-size: 0.92rem;
+    }
+
+    .chat-message.visitor {
+      align-self: flex-end;
+      background: #5c6ac4;
+      color: #fff;
+    }
+
+    .chat-form-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chat-form-row input {
+      min-width: 0;
+    }
+
+    .chat-form-row button {
+      width: auto;
+      flex: 0 0 auto;
+      margin: 0;
+      padding: 0 16px;
+    }
+
+    .chat-note {
+      margin: 10px 0 0;
+      color: #687386;
+      font-size: 0.78rem;
+    }
+
+    @media (max-width: 480px) {
+      .form-card {
+        padding: 30px 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <button class="login-icon" id="openLogin" type="button" aria-label="Partner login" title="Partner login">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M4.5 20a7.5 7.5 0 0 1 15 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+  </button>
+
+  <dialog class="login-dialog" id="loginDialog">
+    <form id="loginForm">
+      <span class="eyebrow">Partner access</span>
+      <h2>Log in</h2>
+      <p class="intro">Enter your Partner code to continue.</p>
+      <div class="field">
+        <label for="partnerCode">Partner code</label>
+        <input id="partnerCode" name="partnerCode" type="password" inputmode="numeric" autocomplete="off" required>
+      </div>
+      <button type="submit">Log in</button>
+      <p class="login-message" id="loginMessage" aria-live="polite"></p>
+      <button type="button" id="closeLogin" class="login-close">Close</button>
+    </form>
+  </dialog>
+
+  <button class="chat-launcher" id="openChat" type="button" aria-expanded="false" aria-controls="helpChat">Help chat</button>
+  <section class="chat-panel" id="helpChat" aria-label="Help chat" aria-live="polite">
+    <div class="chat-heading">
+      <h2>Help chat</h2>
+      <button class="chat-close" id="closeChat" type="button" aria-label="Close help chat">×</button>
+    </div>
+    <form id="chatIdentityForm">
+      <p class="intro">Enter your Reg no. to open your saved chat.</p>
+      <div class="field">
+        <label for="chatRegNo">Reg no.</label>
+        <input id="chatRegNo" type="text" required autocomplete="off" placeholder="Enter your Reg no.">
+      </div>
+      <button type="submit">Continue</button>
+    </form>
+    <div id="chatConversation" hidden>
+      <p class="chat-note" id="chatAccount"></p>
+      <div class="chat-history" id="chatHistory" role="log" aria-live="polite"></div>
+      <form id="chatMessageForm" class="chat-form-row">
+        <input id="chatMessageInput" type="text" aria-label="Your message" placeholder="Type a message..." required autocomplete="off">
+        <button type="submit">Send</button>
+      </form>
+      <p class="chat-note">Chat history is saved only in this browser on this device.</p>
+      <button class="chat-change" id="changeChatRegNo" type="button">Use a different Reg no.</button>
+    </div>
+  </section>
+
+  <main class="form-card" id="app">
+    <span class="eyebrow">A simple form</span>
+    <h1>Enter your details</h1>
+    <p class="intro">Fill in both fields below to get started.</p>
+
+    <form id="detailsForm">
+      <div class="field">
+        <label for="classInput">Class</label>
+        <select id="classInput" name="classInput" required>
+          <option value="XII/E">XII/E</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="regNoInput">Reg no.</label>
+        <input id="regNoInput" name="regNoInput" type="text" placeholder="Enter numbers or symbols..." required>
+      </div>
+
+      <button type="submit">Submit</button>
+    </form>
+  </main>
+
+  <script>
+    const app = document.getElementById('app');
+    const detailsForm = document.getElementById('detailsForm');
+    const regNoInput = document.getElementById('regNoInput');
+    const acceptedRegNos = new Set(['1790-25', '1791-25', '1792-25']);
+
+    regNoInput.addEventListener('input', () => {
+      regNoInput.value = regNoInput.value.replace(/\p{L}/gu, '');
+    });
+
+    detailsForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+
+      const regNo = regNoInput.value.trim();
+      const isAccepted = acceptedRegNos.has(regNo);
+      let attachment = null;
+      try {
+        attachment = JSON.parse(localStorage.getItem(`registration-document:${regNo}`) || 'null');
+      } catch {
+        attachment = null;
+      }
+
+      app.innerHTML = isAccepted
+        ? `<span class="eyebrow">Registration verified</span>
+           <h1>Welcome to Class XII/E</h1>
+           <p class="intro">Your registration number is on the Class XII/E list.</p>
+           <a class="back-link" href="#" id="backLink">Back to the form</a>`
+        : `<span class="eyebrow">Registration result</span>
+           <h1>Student of a different class</h1>
+           <p class="intro">This registration number is not on the Class XII/E list.</p>
+           <a class="back-link" href="#" id="backLink">Back to the form</a>`;
+
+      let previewUrl = '';
+      if (attachment && typeof attachment.dataUrl === 'string' && attachment.dataUrl.startsWith('data:application/pdf')) {
+        previewUrl = attachment.dataUrl;
+      } else if (attachment && typeof attachment.url === 'string') {
+        try {
+          const parsedUrl = new URL(attachment.url);
+          if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') previewUrl = parsedUrl.href;
+        } catch {
+          previewUrl = '';
+        }
+      }
+
+      if (previewUrl) {
+        const previewSection = document.createElement('section');
+        previewSection.className = 'document-preview-section';
+        const heading = document.createElement('h2');
+        heading.textContent = 'Attached document';
+        const link = document.createElement('a');
+        link.href = previewUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = `Open ${attachment.name || 'document'}`;
+        const preview = document.createElement('iframe');
+        preview.className = 'document-preview';
+        preview.src = previewUrl;
+        preview.title = `Preview of ${attachment.name || 'attached document'}`;
+        preview.referrerPolicy = 'no-referrer';
+        previewSection.append(heading, link, preview);
+        app.insertBefore(previewSection, document.getElementById('backLink'));
+      }
+
+      document.getElementById('backLink').addEventListener('click', (backEvent) => {
+        backEvent.preventDefault();
+        window.location.reload();
+      });
+    });
+
+    const loginDialog = document.getElementById('loginDialog');
+    const loginForm = document.getElementById('loginForm');
+    const partnerCode = document.getElementById('partnerCode');
+    const loginMessage = document.getElementById('loginMessage');
+
+    document.getElementById('openLogin').addEventListener('click', () => {
+      loginDialog.showModal();
+      partnerCode.focus();
+    });
+
+    document.getElementById('closeLogin').addEventListener('click', () => {
+      loginDialog.close();
+    });
+
+    loginForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const isValidCode = partnerCode.value.trim() === '8409';
+      if (isValidCode) {
+        sessionStorage.setItem('partnerLoggedIn', 'true');
+        window.location.href = 'support.html';
+        return;
+      }
+      loginMessage.textContent = 'Invalid Partner code. Please try again.';
+      loginMessage.classList.add('error');
+    });
+
+    const chatPanel = document.getElementById('helpChat');
+    const chatIdentityForm = document.getElementById('chatIdentityForm');
+    const chatRegNo = document.getElementById('chatRegNo');
+    const chatConversation = document.getElementById('chatConversation');
+    const chatHistory = document.getElementById('chatHistory');
+    const chatMessageForm = document.getElementById('chatMessageForm');
+    const chatMessageInput = document.getElementById('chatMessageInput');
+    const chatAccount = document.getElementById('chatAccount');
+    let activeChatKey = '';
+
+    function showChatHistory() {
+      chatHistory.replaceChildren();
+      let messages = [];
+      try {
+        messages = JSON.parse(localStorage.getItem(activeChatKey) || '[]');
+        if (!Array.isArray(messages)) messages = [];
+      } catch {
+        messages = [];
+      }
+
+      if (messages.length === 0) {
+        const emptyMessage = document.createElement('p');
+        emptyMessage.className = 'chat-note';
+        emptyMessage.textContent = 'No messages yet. Start the conversation below.';
+        chatHistory.append(emptyMessage);
+      }
+
+      messages.forEach((message) => {
+        const isSupport = typeof message === 'object' && message.sender === 'support';
+        const bubble = document.createElement('p');
+        bubble.className = `chat-message${isSupport ? '' : ' visitor'}`;
+        bubble.textContent = typeof message === 'string' ? message : message.text;
+        chatHistory.append(bubble);
+      });
+      chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+
+    document.getElementById('openChat').addEventListener('click', () => {
+      chatPanel.classList.add('is-open');
+      document.getElementById('openChat').setAttribute('aria-expanded', 'true');
+      if (!activeChatKey) chatRegNo.focus();
+      else chatMessageInput.focus();
+    });
+
+    document.getElementById('closeChat').addEventListener('click', () => {
+      chatPanel.classList.remove('is-open');
+      document.getElementById('openChat').setAttribute('aria-expanded', 'false');
+    });
+
+    chatRegNo.addEventListener('input', () => {
+      chatRegNo.value = chatRegNo.value.replace(/\p{L}/gu, '');
+    });
+
+    chatIdentityForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const regNo = chatRegNo.value.trim();
+      if (!regNo) return;
+
+      activeChatKey = `registration-chat:${regNo}`;
+      chatAccount.textContent = `Chat for Reg no. ${regNo}`;
+      chatIdentityForm.hidden = true;
+      chatConversation.hidden = false;
+      showChatHistory();
+      chatMessageInput.focus();
+    });
+
+    chatMessageForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const message = chatMessageInput.value.trim();
+      if (!message || !activeChatKey) return;
+
+      let messages = [];
+      try {
+        messages = JSON.parse(localStorage.getItem(activeChatKey) || '[]');
+        if (!Array.isArray(messages)) messages = [];
+      } catch {
+        messages = [];
+      }
+      messages.push({ sender: 'visitor', text: message, time: Date.now() });
+      try {
+        localStorage.setItem(activeChatKey, JSON.stringify(messages));
+      } catch {
+        chatAccount.textContent = 'Could not save chat history in this browser.';
+      }
+      chatMessageInput.value = '';
+      showChatHistory();
+      chatMessageInput.focus();
+    });
+
+    document.getElementById('changeChatRegNo').addEventListener('click', () => {
+      activeChatKey = '';
+      chatConversation.hidden = true;
+      chatIdentityForm.hidden = false;
+      chatRegNo.value = '';
+      chatRegNo.focus();
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (event.key === activeChatKey && activeChatKey) showChatHistory();
+    });
+  </script>
+</body>
+</html>

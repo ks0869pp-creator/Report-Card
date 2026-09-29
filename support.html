@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Partner support inbox</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      background: linear-gradient(135deg, #eef2ff, #f8fafc 55%, #e0f2fe);
+      color: #172033;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .inbox {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      width: min(100%, 1000px);
+      min-height: min(720px, calc(100vh - 48px));
+      margin: 0 auto;
+      overflow: hidden;
+      border: 1px solid #e7eaf2;
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: 0 20px 60px rgba(39, 55, 99, 0.12);
+    }
+    .sidebar { padding: 24px 16px; border-right: 1px solid #e7eaf2; }
+    h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    .subtle { color: #687386; line-height: 1.5; }
+    #chatList { display: grid; gap: 8px; margin-top: 24px; }
+    .chat-select {
+      width: 100%; padding: 12px; border: 1px solid #e7eaf2; border-radius: 10px;
+      background: #fff; color: #172033; text-align: left; cursor: pointer;
+    }
+    .chat-select[aria-current="true"] { border-color: #5c6ac4; background: #f4f5ff; }
+    .conversation { display: flex; min-width: 0; flex-direction: column; padding: 24px; }
+    .conversation-header { padding-bottom: 16px; border-bottom: 1px solid #e7eaf2; }
+    .conversation-header h2 { margin: 0; font-size: 1.25rem; }
+    .document-manager { padding: 14px 0; border-bottom: 1px solid #e7eaf2; }
+    .document-manager[hidden] { display: none; }
+    .document-manager p { margin: 0 0 10px; color: #687386; }
+    .document-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0; }
+    .document-controls input[type="file"], .document-controls input[type="url"] { min-width: 0; flex: 1; }
+    .document-controls button { padding: 9px 12px; border: 0; border-radius: 8px; background: #5c6ac4; color: #fff; font: inherit; cursor: pointer; }
+    .document-controls button.remove-document { background: #b42318; }
+    .document-preview { display: block; width: 100%; height: min(65vh, 680px); margin-top: 14px; border: 1px solid #e7eaf2; border-radius: 10px; background: #f8fafc; }
+    #documentStatus { margin-top: 8px; font-size: .9rem; }
+    #messages {
+      display: flex; flex: 1; flex-direction: column; align-items: flex-start; gap: 10px;
+      min-height: 280px; max-height: 60vh; padding: 18px 4px; overflow-y: auto;
+    }
+    .message {
+      max-width: min(80%, 560px); margin: 0; padding: 10px 13px; border-radius: 12px;
+      background: #f0f2fb; overflow-wrap: anywhere; white-space: pre-wrap;
+    }
+    .message.visitor { align-self: flex-end; background: #5c6ac4; color: #fff; }
+    .message-meta { display: block; margin-bottom: 4px; font-size: .72rem; opacity: .75; }
+    form { display: flex; gap: 10px; }
+    input {
+      min-width: 0; flex: 1; padding: 13px 14px; border: 1px solid #d7dce7;
+      border-radius: 10px; font: inherit;
+    }
+    button.send, .logout {
+      padding: 12px 18px; border: 0; border-radius: 10px; background: #5c6ac4;
+      color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+    }
+    .logout { margin-top: 20px; background: transparent; color: #4c59ad; padding: 0; }
+    .empty { margin: auto; color: #687386; text-align: center; }
+    @media (max-width: 640px) {
+      body { padding: 12px; }
+      .inbox { grid-template-columns: 1fr; min-height: calc(100vh - 24px); }
+      .sidebar { padding: 18px; border-right: 0; border-bottom: 1px solid #e7eaf2; }
+      #chatList { display: flex; max-width: 100%; overflow-x: auto; }
+      .chat-select { width: auto; flex: 0 0 auto; }
+      .conversation { min-height: 460px; padding: 18px; }
+      #messages { max-height: 45vh; }
+    }
+  </style>
+</head>
+<body>
+  <main class="inbox">
+    <aside class="sidebar">
+      <h1>Support inbox</h1>
+      <p class="subtle">Verified Reg nos. and existing chats are listed here.</p>
+      <div id="chatList" aria-label="Chats"></div>
+      <p class="subtle" id="noChats">No verified registrations or chats found.</p>
+      <button class="logout" id="logout" type="button">Log out</button>
+    </aside>
+    <section class="conversation" aria-label="Selected chat">
+      <header class="conversation-header">
+        <h2 id="conversationTitle">Select a chat</h2>
+      </header>
+      <section class="document-manager" id="documentManager" hidden aria-label="Manage student document">
+        <p id="documentCurrent">No document attached.</p>
+        <form id="documentForm" class="document-controls">
+          <input id="documentFile" type="file" accept="application/pdf,.pdf" aria-label="Choose a PDF document" required>
+          <button type="submit">Attach PDF</button>
+          <button class="remove-document" id="removeDocument" type="button" hidden>Remove document</button>
+        </form>
+        <form id="documentLinkForm" class="document-controls">
+          <input id="documentUrl" type="url" placeholder="https://... document link" aria-label="Hosted document link" required>
+          <button type="submit">Save link</button>
+        </form>
+        <div id="documentPreviewContainer"></div>
+        <p id="documentStatus" aria-live="polite">Attach a PDF here or paste a hosted document link.</p>
+      </section>
+      <div id="messages" role="log" aria-live="polite">
+        <p class="empty">Choose a Reg no. to view its conversation.</p>
+      </div>
+      <form id="replyForm" hidden>
+        <input id="replyInput" type="text" aria-label="Your reply" placeholder="Write a reply..." required autocomplete="off">
+        <button class="send" type="submit">Send</button>
+      </form>
+    </section>
+  </main>
+  <script>
+    if (sessionStorage.getItem('partnerLoggedIn') !== 'true') {
+      window.location.replace('index.html');
+    }
+
+    const prefix = 'registration-chat:';
+    const chatList = document.getElementById('chatList');
+    const noChats = document.getElementById('noChats');
+    const messages = document.getElementById('messages');
+    const title = document.getElementById('conversationTitle');
+    const replyForm = document.getElementById('replyForm');
+    const replyInput = document.getElementById('replyInput');
+    const documentManager = document.getElementById('documentManager');
+    const documentForm = document.getElementById('documentForm');
+    const documentFile = document.getElementById('documentFile');
+    const documentLinkForm = document.getElementById('documentLinkForm');
+    const documentUrl = document.getElementById('documentUrl');
+    const documentCurrent = document.getElementById('documentCurrent');
+    const documentPreviewContainer = document.getElementById('documentPreviewContainer');
+    const documentStatus = document.getElementById('documentStatus');
+    const removeDocument = document.getElementById('removeDocument');
+    let activeKey = '';
+
+    function documentKey() {
+      return activeKey ? `registration-document:${activeKey.slice(prefix.length)}` : '';
+    }
+
+    function renderDocumentManager() {
+      documentManager.hidden = !activeKey;
+      documentCurrent.replaceChildren();
+      documentPreviewContainer.replaceChildren();
+      if (!activeKey) return;
+      let attachment = null;
+      try {
+        attachment = JSON.parse(localStorage.getItem(documentKey()) || 'null');
+      } catch {
+        attachment = null;
+      }
+
+      let previewUrl = '';
+      if (attachment && typeof attachment.dataUrl === 'string' && attachment.dataUrl.startsWith('data:application/pdf')) {
+        previewUrl = attachment.dataUrl;
+      } else if (attachment && typeof attachment.url === 'string') {
+        try {
+          const parsedUrl = new URL(attachment.url);
+          if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') previewUrl = parsedUrl.href;
+        } catch {
+          previewUrl = '';
+        }
+      }
+
+      if (!previewUrl) {
+        documentCurrent.textContent = 'No document attached.';
+        removeDocument.hidden = true;
+        return;
+      }
+
+      const link = document.createElement('a');
+      link.href = previewUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = `Open document: ${attachment.name || 'View document'}`;
+      documentCurrent.append(link);
+
+      const preview = document.createElement('iframe');
+      preview.className = 'document-preview';
+      preview.src = previewUrl;
+      preview.title = `Preview of ${attachment.name || 'attached document'}`;
+      preview.referrerPolicy = 'no-referrer';
+      documentPreviewContainer.append(preview);
+      removeDocument.hidden = false;
+    }
+
+    function readMessages(key) {
+      try {
+        const data = JSON.parse(localStorage.getItem(key) || '[]');
+        return Array.isArray(data) ? data : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function renderMessages() {
+      messages.replaceChildren();
+      if (!activeKey) return;
+      const history = readMessages(activeKey);
+      if (!history.length) {
+        const empty = document.createElement('p');
+        empty.className = 'empty';
+        empty.textContent = 'No messages yet.';
+        messages.append(empty);
+        return;
+      }
+      history.forEach((item) => {
+        const fromSupport = typeof item === 'object' && item.sender === 'support';
+        const bubble = document.createElement('p');
+        bubble.className = `message${fromSupport ? '' : ' visitor'}`;
+        const sender = document.createElement('span');
+        sender.className = 'message-meta';
+        sender.textContent = fromSupport ? 'You' : 'Visitor';
+        bubble.append(sender, document.createTextNode(typeof item === 'string' ? item : item.text));
+        messages.append(bubble);
+      });
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function renderChatList() {
+      const verifiedRegNos = ['1790-25', '1791-25', '1792-25'];
+      const existingRegNos = Object.keys(localStorage)
+        .filter((key) => key.startsWith(prefix))
+        .map((key) => key.slice(prefix.length));
+      const regNos = [...new Set([...verifiedRegNos, ...existingRegNos])]
+        .sort((a, b) => a.localeCompare(b));
+      chatList.replaceChildren();
+      noChats.hidden = regNos.length > 0;
+      regNos.forEach((regNo) => {
+        const key = `${prefix}${regNo}`;
+        const button = document.createElement('button');
+        button.className = 'chat-select';
+        button.type = 'button';
+        button.textContent = `Reg no. ${regNo}`;
+        button.setAttribute('aria-current', String(key === activeKey));
+        button.addEventListener('click', () => {
+          activeKey = key;
+          title.textContent = `Chat for Reg no. ${regNo}`;
+          replyForm.hidden = false;
+          renderChatList();
+          renderMessages();
+          renderDocumentManager();
+          replyInput.focus();
+        });
+        chatList.append(button);
+      });
+    }
+
+    documentForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const file = documentFile.files[0];
+      if (!file || !activeKey) return;
+      if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+        documentStatus.textContent = 'Please choose a PDF file.';
+        return;
+      }
+      if (file.size > 1.5 * 1024 * 1024) {
+        documentStatus.textContent = 'That PDF is too large. Choose a file under 1.5 MB.';
+        return;
+      }
+
+      const key = documentKey();
+      const reader = new FileReader();
+      reader.addEventListener('load', () => {
+        try {
+          localStorage.setItem(key, JSON.stringify({ name: file.name, dataUrl: reader.result }));
+          documentStatus.textContent = 'PDF attached.';
+          documentFile.value = '';
+          if (key === documentKey()) renderDocumentManager();
+        } catch {
+          documentStatus.textContent = 'Could not save this PDF in this browser.';
+        }
+      });
+      reader.addEventListener('error', () => {
+        documentStatus.textContent = 'Could not read this PDF file.';
+      });
+      reader.readAsDataURL(file);
+    });
+
+    documentLinkForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!activeKey) return;
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(documentUrl.value.trim());
+      } catch {
+        documentStatus.textContent = 'Enter a valid full document URL.';
+        return;
+      }
+      if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+        documentStatus.textContent = 'Document links must start with http:// or https://.';
+        return;
+      }
+      try {
+        localStorage.setItem(documentKey(), JSON.stringify({ name: 'Linked document', url: parsedUrl.href }));
+        documentStatus.textContent = 'Document link saved.';
+        documentUrl.value = '';
+        renderDocumentManager();
+      } catch {
+        documentStatus.textContent = 'Could not save this document link in this browser.';
+      }
+    });
+
+    removeDocument.addEventListener('click', () => {
+      if (!activeKey) return;
+      try {
+        localStorage.removeItem(documentKey());
+        documentStatus.textContent = 'Document removed.';
+        renderDocumentManager();
+      } catch {
+        documentStatus.textContent = 'Could not remove this PDF.';
+      }
+    });
+
+    replyForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const text = replyInput.value.trim();
+      if (!text || !activeKey) return;
+      const history = readMessages(activeKey);
+      history.push({ sender: 'support', text, time: Date.now() });
+      try {
+        localStorage.setItem(activeKey, JSON.stringify(history));
+      } catch {
+        window.alert('Could not save this reply in this browser.');
+        return;
+      }
+      replyInput.value = '';
+      renderMessages();
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (event.key === null || event.key.startsWith(prefix)) {
+        renderChatList();
+        renderMessages();
+      }
+      if (event.key === null || (activeKey && event.key === documentKey())) {
+        renderDocumentManager();
+      }
+    });
+
+    document.getElementById('logout').addEventListener('click', () => {
+      sessionStorage.removeItem('partnerLoggedIn');
+      window.location.href = 'index.html';
+    });
+
+    renderChatList();
+  </script>
+</body>
+</html>
