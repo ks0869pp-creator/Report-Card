@@ -115,10 +115,12 @@
       </form>
     </section>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    if (sessionStorage.getItem('partnerLoggedIn') !== 'true') {
-      window.location.replace('index.html');
-    }
+    document.body.hidden = true;
+    const supabaseUrl = 'https://knjrhohyesqxsoessmnr.supabase.co';
+    const supabasePublishableKey = 'sb_publishable_XgMa767xmOW0J28GXqxO3w_HDqCGV_2';
+    const supabaseClient = window.supabase.createClient(supabaseUrl, supabasePublishableKey);
 
     const prefix = 'registration-chat:';
     const chatList = document.getElementById('chatList');
@@ -137,29 +139,34 @@
     const documentStatus = document.getElementById('documentStatus');
     const removeDocument = document.getElementById('removeDocument');
     let activeKey = '';
+    let activeDocumentUrl = '';
 
     function documentKey() {
       return activeKey ? `registration-document:${activeKey.slice(prefix.length)}` : '';
     }
 
-    function renderDocumentManager() {
+    async function renderDocumentManager() {
       documentManager.hidden = !activeKey;
       documentCurrent.replaceChildren();
       documentPreviewContainer.replaceChildren();
+      removeDocument.hidden = true;
+      activeDocumentUrl = '';
       if (!activeKey) return;
-      let attachment = null;
-      try {
-        attachment = JSON.parse(localStorage.getItem(documentKey()) || 'null');
-      } catch {
-        attachment = null;
+      const regNo = activeKey.slice(prefix.length);
+      const { data: registration, error } = await supabaseClient
+        .from('registrations')
+        .select('url')
+        .eq('reg_no', regNo)
+        .maybeSingle();
+      if (error) {
+        documentCurrent.textContent = 'Could not load this document.';
+        return;
       }
-
+      activeDocumentUrl = registration?.url || '';
       let previewUrl = '';
-      if (attachment && typeof attachment.dataUrl === 'string' && attachment.dataUrl.startsWith('data:application/pdf')) {
-        previewUrl = attachment.dataUrl;
-      } else if (attachment && typeof attachment.url === 'string') {
+      if (activeDocumentUrl) {
         try {
-          const parsedUrl = new URL(attachment.url);
+          const parsedUrl = new URL(activeDocumentUrl);
           if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') previewUrl = parsedUrl.href;
         } catch {
           previewUrl = '';
@@ -176,13 +183,13 @@
       link.href = previewUrl;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.textContent = `Open document: ${attachment.name || 'View document'}`;
+      link.textContent = 'Open saved document';
       documentCurrent.append(link);
 
       const preview = document.createElement('iframe');
       preview.className = 'document-preview';
       preview.src = previewUrl;
-      preview.title = `Preview of ${attachment.name || 'attached document'}`;
+      preview.title = 'Preview of saved document';
       preview.referrerPolicy = 'no-referrer';
       documentPreviewContainer.append(preview);
       removeDocument.hidden = false;
@@ -221,15 +228,21 @@
       messages.scrollTop = messages.scrollHeight;
     }
 
-    function renderChatList() {
-      const verifiedRegNos = ['1790-25', '1791-25', '1792-25'];
-      const existingRegNos = Object.keys(localStorage)
-        .filter((key) => key.startsWith(prefix))
-        .map((key) => key.slice(prefix.length));
-      const regNos = [...new Set([...verifiedRegNos, ...existingRegNos])]
-        .sort((a, b) => a.localeCompare(b));
+    async function renderChatList() {
+      const { data: registrations, error } = await supabaseClient
+        .from('registrations')
+        .select('reg_no')
+        .order('reg_no');
+      if (error) {
+        chatList.replaceChildren();
+        noChats.textContent = 'Could not load registrations. Try reloading.';
+        noChats.hidden = false;
+        return;
+      }
+      const regNos = registrations.map((registration) => registration.reg_no);
       chatList.replaceChildren();
       noChats.hidden = regNos.length > 0;
+      noChats.textContent = 'No registrations found.';
       regNos.forEach((regNo) => {
         const key = `${prefix}${regNo}`;
         const button = document.createElement('button');
@@ -250,7 +263,18 @@
       });
     }
 
-    documentForm.addEventListener('submit', (event) => {
+    async function saveDocumentUrl(regNo, url) {
+      const { data, error } = await supabaseClient
+        .from('registrations')
+        .update({ url })
+        .eq('reg_no', regNo)
+        .select('reg_no')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Registration not found.');
+    }
+
+    documentForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const file = documentFile.files[0];
       if (!file || !activeKey) return;
@@ -263,25 +287,35 @@
         return;
       }
 
-      const key = documentKey();
-      const reader = new FileReader();
-      reader.addEventListener('load', () => {
-        try {
-          localStorage.setItem(key, JSON.stringify({ name: file.name, dataUrl: reader.result }));
-          documentStatus.textContent = 'PDF attached.';
-          documentFile.value = '';
-          if (key === documentKey()) renderDocumentManager();
-        } catch {
-          documentStatus.textContent = 'Could not save this PDF in this browser.';
+      const regNo = activeKey.slice(prefix.length);
+      const safeRegNo = regNo.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const objectPath = `${safeRegNo}/${crypto.randomUUID()}-${safeFileName}`;
+      let uploadedPath = '';
+      documentStatus.textContent = 'Uploading PDF...';
+      try {
+        const { error: uploadError } = await supabaseClient.storage
+          .from('student-documents')
+          .upload(objectPath, file, { contentType: 'application/pdf', upsert: false });
+        if (uploadError) throw uploadError;
+        uploadedPath = objectPath;
+        const { data: publicDocument } = supabaseClient.storage
+          .from('student-documents')
+          .getPublicUrl(objectPath);
+        await saveDocumentUrl(regNo, publicDocument.publicUrl);
+        documentStatus.textContent = 'PDF backed up and attached.';
+        documentFile.value = '';
+        await renderDocumentManager();
+      } catch (error) {
+        if (uploadedPath) {
+          await supabaseClient.storage.from('student-documents').remove([uploadedPath]);
         }
-      });
-      reader.addEventListener('error', () => {
-        documentStatus.textContent = 'Could not read this PDF file.';
-      });
-      reader.readAsDataURL(file);
+        console.error('PDF upload failed:', error);
+        documentStatus.textContent = 'Could not upload the PDF. Check your Supabase setup and try again.';
+      }
     });
 
-    documentLinkForm.addEventListener('submit', (event) => {
+    documentLinkForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!activeKey) return;
       let parsedUrl;
@@ -296,23 +330,34 @@
         return;
       }
       try {
-        localStorage.setItem(documentKey(), JSON.stringify({ name: 'Linked document', url: parsedUrl.href }));
-        documentStatus.textContent = 'Document link saved.';
+        await saveDocumentUrl(activeKey.slice(prefix.length), parsedUrl.href);
+        documentStatus.textContent = 'Document link backed up.';
         documentUrl.value = '';
-        renderDocumentManager();
-      } catch {
-        documentStatus.textContent = 'Could not save this document link in this browser.';
+        await renderDocumentManager();
+      } catch (error) {
+        console.error('Document link save failed:', error);
+        documentStatus.textContent = 'Could not save the link to Supabase.';
       }
     });
 
-    removeDocument.addEventListener('click', () => {
+    removeDocument.addEventListener('click', async () => {
       if (!activeKey) return;
       try {
-        localStorage.removeItem(documentKey());
-        documentStatus.textContent = 'Document removed.';
-        renderDocumentManager();
-      } catch {
-        documentStatus.textContent = 'Could not remove this PDF.';
+        const regNo = activeKey.slice(prefix.length);
+        const savedUrl = activeDocumentUrl;
+        const parsedUrl = new URL(savedUrl);
+        const storagePathPrefix = '/storage/v1/object/public/student-documents/';
+        if (parsedUrl.origin === new URL(supabaseUrl).origin && parsedUrl.pathname.startsWith(storagePathPrefix)) {
+          const objectPath = decodeURIComponent(parsedUrl.pathname.slice(storagePathPrefix.length));
+          const { error } = await supabaseClient.storage.from('student-documents').remove([objectPath]);
+          if (error) throw error;
+        }
+        await saveDocumentUrl(regNo, null);
+        documentStatus.textContent = 'Document removed from Supabase.';
+        await renderDocumentManager();
+      } catch (error) {
+        console.error('Document removal failed:', error);
+        documentStatus.textContent = 'Could not remove this document from Supabase.';
       }
     });
 
@@ -337,17 +382,24 @@
         renderChatList();
         renderMessages();
       }
-      if (event.key === null || (activeKey && event.key === documentKey())) {
-        renderDocumentManager();
-      }
     });
 
-    document.getElementById('logout').addEventListener('click', () => {
-      sessionStorage.removeItem('partnerLoggedIn');
+    document.getElementById('logout').addEventListener('click', async () => {
+      await supabaseClient.auth.signOut();
       window.location.href = 'index.html';
     });
 
-    renderChatList();
+    async function initializeSupportPage() {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error || !data.session) {
+        window.location.replace('index.html');
+        return;
+      }
+      document.body.hidden = false;
+      await renderChatList();
+    }
+
+    initializeSupportPage();
   </script>
 </body>
 </html>

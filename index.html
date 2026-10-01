@@ -3,18 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Class Registration</title>
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      min-height: 100vh;
-      margin: 0;
-      padding: 24px;
-      display: grid;
-      place-items: center;
+      if (typeof registration?.url === 'string') {
       background: linear-gradient(135deg, #eef2ff, #f8fafc 55%, #e0f2fe);
       color: #172033;
       font-family: Arial, Helvetica, sans-serif;
@@ -337,10 +326,14 @@
     <form id="loginForm">
       <span class="eyebrow">Partner access</span>
       <h2>Log in</h2>
-      <p class="intro">Enter your Partner code to continue.</p>
+      <p class="intro">Sign in with your partner account.</p>
       <div class="field">
-        <label for="partnerCode">Partner code</label>
-        <input id="partnerCode" name="partnerCode" type="password" inputmode="numeric" autocomplete="off" required>
+        <label for="partnerEmail">Email</label>
+        <input id="partnerEmail" name="partnerEmail" type="email" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="partnerPassword">Password</label>
+        <input id="partnerPassword" name="partnerPassword" type="password" autocomplete="current-password" required>
       </div>
       <button type="submit">Log in</button>
       <p class="login-message" id="loginMessage" aria-live="polite"></p>
@@ -396,21 +389,48 @@
     </form>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     const app = document.getElementById('app');
     const detailsForm = document.getElementById('detailsForm');
     const regNoInput = document.getElementById('regNoInput');
-    const acceptedRegNos = new Set(['1790-25', '1791-25', '1792-25']);
+    const supabaseUrl = 'https://knjrhohyesqxsoessmnr.supabase.co';
+    const supabasePublishableKey = 'sb_publishable_XgMa767xmOW0J28GXqxO3w_HDqCGV_2';
+    const supabaseClient = supabaseUrl && supabasePublishableKey
+      ? window.supabase.createClient(supabaseUrl, supabasePublishableKey)
+      : null;
+
+    function normalizeRegistrationNumber(value) {
+      return value.trim().replace(/[\u2010-\u2015\u2212]/g, '-');
+    }
 
     regNoInput.addEventListener('input', () => {
       regNoInput.value = regNoInput.value.replace(/\p{L}/gu, '');
     });
 
-    detailsForm.addEventListener('submit', (event) => {
+    detailsForm.addEventListener('submit', async (event) => {
       event.preventDefault();
 
-      const regNo = regNoInput.value.trim();
-      const isAccepted = acceptedRegNos.has(regNo);
+      const regNo = normalizeRegistrationNumber(regNoInput.value);
+      if (!supabaseClient) {
+        window.alert('Add your Supabase project URL and publishable key in index.html first.');
+        return;
+      }
+
+      let registration;
+      try {
+        const { data, error } = await supabaseClient.rpc('lookup_registration', {
+          reg_no_input: regNo
+        });
+        if (error) throw error;
+        registration = Array.isArray(data) ? data[0] : data;
+      } catch (error) {
+        console.error('Registration lookup failed:', error);
+        window.alert('Could not check the registration. Check your Supabase setup and try again.');
+        return;
+      }
+
+      const isAccepted = Boolean(registration);
       let attachment = null;
       try {
         attachment = JSON.parse(localStorage.getItem(`registration-document:${regNo}`) || 'null');
@@ -440,6 +460,26 @@
         }
       }
 
+      if (!previewUrl && attachment && typeof attachment.dataUrl === 'string' && attachment.dataUrl.startsWith('data:application/pdf')) {
+        previewUrl = attachment.dataUrl;
+      } else if (!previewUrl && attachment && typeof attachment.url === 'string') {
+        try {
+          const parsedUrl = new URL(attachment.url);
+          if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') previewUrl = parsedUrl.href;
+        } catch {
+          previewUrl = '';
+        }
+      }
+
+      if (!previewUrl && typeof registration?.url === 'string') {
+        try {
+          const parsedUrl = new URL(registration.url);
+          if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') previewUrl = parsedUrl.href;
+        } catch {
+          previewUrl = '';
+        }
+      }
+
       if (previewUrl) {
         const previewSection = document.createElement('section');
         previewSection.className = 'document-preview-section';
@@ -449,14 +489,18 @@
         link.href = previewUrl;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        link.textContent = `Open ${attachment.name || 'document'}`;
+        link.textContent = `Open ${attachment?.name || 'document'}`;
         const preview = document.createElement('iframe');
         preview.className = 'document-preview';
         preview.src = previewUrl;
-        preview.title = `Preview of ${attachment.name || 'attached document'}`;
+        preview.title = `Preview of ${attachment?.name || 'attached document'}`;
         preview.referrerPolicy = 'no-referrer';
         previewSection.append(heading, link, preview);
         app.insertBefore(previewSection, document.getElementById('backLink'));
+      } else if (isAccepted) {
+        const noDocument = document.createElement('p');
+        noDocument.textContent = 'No document has been linked to this registration yet.';
+        app.insertBefore(noDocument, document.getElementById('backLink'));
       }
 
       document.getElementById('backLink').addEventListener('click', (backEvent) => {
@@ -467,28 +511,35 @@
 
     const loginDialog = document.getElementById('loginDialog');
     const loginForm = document.getElementById('loginForm');
-    const partnerCode = document.getElementById('partnerCode');
+    const partnerEmail = document.getElementById('partnerEmail');
+    const partnerPassword = document.getElementById('partnerPassword');
     const loginMessage = document.getElementById('loginMessage');
 
     document.getElementById('openLogin').addEventListener('click', () => {
       loginDialog.showModal();
-      partnerCode.focus();
+      partnerEmail.focus();
     });
 
     document.getElementById('closeLogin').addEventListener('click', () => {
       loginDialog.close();
     });
 
-    loginForm.addEventListener('submit', (event) => {
+    loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const isValidCode = partnerCode.value.trim() === '8409';
-      if (isValidCode) {
-        sessionStorage.setItem('partnerLoggedIn', 'true');
-        window.location.href = 'support.html';
+      if (!supabaseClient) {
+        loginMessage.textContent = 'Supabase is not configured.';
         return;
       }
-      loginMessage.textContent = 'Invalid Partner code. Please try again.';
-      loginMessage.classList.add('error');
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email: partnerEmail.value.trim(),
+        password: partnerPassword.value
+      });
+      if (error) {
+        loginMessage.textContent = 'Sign-in failed. Check your email and password.';
+        loginMessage.classList.add('error');
+        return;
+      }
+      window.location.href = 'support.html';
     });
 
     const chatPanel = document.getElementById('helpChat');
