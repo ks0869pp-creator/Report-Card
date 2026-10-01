@@ -387,7 +387,7 @@
       <div class="field">
         <label for="classInput">Class</label>
         <select id="classInput" name="classInput" required>
-          <option value="XII/E">XII/E</option>
+          <option value="" selected disabled>Loading classes...</option>
         </select>
       </div>
 
@@ -404,6 +404,7 @@
   <script>
     const app = document.getElementById('app');
     const detailsForm = document.getElementById('detailsForm');
+    const classInput = document.getElementById('classInput');
     const regNoInput = document.getElementById('regNoInput');
     const supabaseUrl = 'https://knjrhohyesqxsoessmnr.supabase.co';
     const supabasePublishableKey = 'sb_publishable_XgMa767xmOW0J28GXqxO3w_HDqCGV_2';
@@ -414,6 +415,23 @@
     function normalizeRegistrationNumber(value) {
       return value.trim().replace(/[\u2010-\u2015\u2212]/g, '-');
     }
+
+    async function loadClasses() {
+      try {
+        const { data, error } = await supabaseClient.rpc('list_registration_classes');
+        if (error) throw error;
+
+        classInput.replaceChildren(new Option('Select a class', ''));
+        for (const row of data || []) {
+          classInput.add(new Option(row.class_name, row.class_name));
+        }
+      } catch (error) {
+        console.error('Class list could not be loaded:', error);
+        classInput.replaceChildren(new Option('Could not load classes', ''));
+      }
+    }
+
+    if (supabaseClient) loadClasses();
 
     function getPreviewUrl(value) {
       try {
@@ -438,6 +456,7 @@
       event.preventDefault();
 
       const regNo = normalizeRegistrationNumber(regNoInput.value);
+      const className = classInput.value;
       if (!supabaseClient) {
         window.alert('Add your Supabase project URL and publishable key in index.html first.');
         return;
@@ -446,7 +465,8 @@
       let registration;
       try {
         const { data, error } = await supabaseClient.rpc('lookup_registration', {
-          reg_no_input: regNo
+          reg_no_input: regNo,
+          class_name_input: className
         });
         if (error) throw error;
         registration = Array.isArray(data) ? data[0] : data;
@@ -466,13 +486,20 @@
 
       app.innerHTML = isAccepted
         ? `<span class="eyebrow">Registration verified</span>
-           <h1>Welcome to Class XII/E</h1>
-           <p class="intro">Your registration number is on the Class XII/E list.</p>
+           <h1 id="resultHeading"></h1>
+           <p class="intro" id="resultMessage"></p>
            <a class="back-link" href="#" id="backLink">Back to the form</a>`
         : `<span class="eyebrow">Registration result</span>
            <h1>Student of a different class</h1>
-           <p class="intro">This registration number is not on the Class XII/E list.</p>
+           <p class="intro" id="resultMessage"></p>
            <a class="back-link" href="#" id="backLink">Back to the form</a>`;
+
+      document.getElementById('resultMessage').textContent = isAccepted
+        ? `Your registration number is on the ${className} list.`
+        : `This registration number is not on the ${className} list.`;
+      if (isAccepted) {
+        document.getElementById('resultHeading').textContent = `Welcome to Class ${className}`;
+      }
 
       let previewUrl = '';
       if (attachment && typeof attachment.dataUrl === 'string' && attachment.dataUrl.startsWith('data:application/pdf')) {
