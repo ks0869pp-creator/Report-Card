@@ -404,6 +404,21 @@
       return value.trim().replace(/[\u2010-\u2015\u2212]/g, '-');
     }
 
+    function getPreviewUrl(value) {
+      try {
+        const parsedUrl = new URL(value);
+        if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') return '';
+        const driveMatch = parsedUrl.hostname === 'drive.google.com'
+          ? parsedUrl.pathname.match(/^\/file\/d\/([^/]+)/)
+          : null;
+        return driveMatch
+          ? `https://drive.google.com/file/d/${driveMatch[1]}/preview`
+          : parsedUrl.href;
+      } catch {
+        return '';
+      }
+    }
+
     regNoInput.addEventListener('input', () => {
       regNoInput.value = regNoInput.value.replace(/\p{L}/gu, '');
     });
@@ -452,32 +467,17 @@
       if (attachment && typeof attachment.dataUrl === 'string' && attachment.dataUrl.startsWith('data:application/pdf')) {
         previewUrl = attachment.dataUrl;
       } else if (attachment && typeof attachment.url === 'string') {
-        try {
-          const parsedUrl = new URL(attachment.url);
-          if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') previewUrl = parsedUrl.href;
-        } catch {
-          previewUrl = '';
-        }
+        previewUrl = getPreviewUrl(attachment.url);
       }
 
       if (!previewUrl && attachment && typeof attachment.dataUrl === 'string' && attachment.dataUrl.startsWith('data:application/pdf')) {
         previewUrl = attachment.dataUrl;
       } else if (!previewUrl && attachment && typeof attachment.url === 'string') {
-        try {
-          const parsedUrl = new URL(attachment.url);
-          if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') previewUrl = parsedUrl.href;
-        } catch {
-          previewUrl = '';
-        }
+        previewUrl = getPreviewUrl(attachment.url);
       }
 
       if (!previewUrl && typeof registration?.url === 'string') {
-        try {
-          const parsedUrl = new URL(registration.url);
-          if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') previewUrl = parsedUrl.href;
-        } catch {
-          previewUrl = '';
-        }
+        previewUrl = getPreviewUrl(registration.url);
       }
 
       if (previewUrl) {
