@@ -1,3 +1,5 @@
+create extension if not exists pgcrypto with schema extensions;
+
 create table if not exists public.registrations (
   reg_no text primary key,
   class_name text,
@@ -13,8 +15,23 @@ alter table public.registrations
 alter table public.registrations enable row level security;
 
 drop function if exists public.lookup_registration(text);
+drop function if exists public.lookup_registration(text, text);
 
-create function public.lookup_registration(reg_no_input text)
+create or replace function public.list_registration_classes()
+returns table (class_name text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select distinct r.class_name::text
+  from public.registrations as r
+  where r.class_name is not null
+    and btrim(r.class_name) <> ''
+  order by r.class_name::text;
+$$;
+
+create function public.lookup_registration(reg_no_input text, class_name_input text)
 returns table (reg_no text, class_name text, url text)
 language sql
 security definer
@@ -23,13 +40,15 @@ as $$
   select r.reg_no::text, r.class_name::text, r.url::text
   from public.registrations as r
   where r.reg_no::text = $1
-    and r.class_name = 'XII/E'
+    and r.class_name = $2
   limit 1;
 $$;
 
-revoke all on function public.lookup_registration(text) from public;
+revoke all on function public.list_registration_classes() from public;
+grant execute on function public.list_registration_classes() to anon, authenticated;
+revoke all on function public.lookup_registration(text, text) from public;
 grant usage on schema public to anon, authenticated;
-grant execute on function public.lookup_registration(text) to anon, authenticated;
+grant execute on function public.lookup_registration(text, text) to anon, authenticated;
 
 create table if not exists public.partner_users (
   user_id uuid primary key references auth.users(id) on delete cascade
@@ -43,6 +62,36 @@ drop policy if exists "Partners can read their own allowlist entry" on public.pa
 create policy "Partners can read their own allowlist entry"
   on public.partner_users for select to authenticated
   using (user_id = auth.uid());
+
+create table if not exists public.partner_access_config (
+  singleton boolean primary key default true check (singleton),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  access_code_hash text not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.partner_access_config enable row level security;
+revoke all on table public.partner_access_config from public, anon, authenticated;
+grant select, insert, update, delete on table public.partner_access_config to service_role;
+
+drop function if exists public.verify_partner_access_code(text);
+create function public.verify_partner_access_code(input_code text)
+returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select c.user_id
+  from public.partner_access_config as c
+  join public.partner_users as p on p.user_id = c.user_id
+  where c.singleton = true
+    and extensions.crypt(input_code, c.access_code_hash) = c.access_code_hash
+  limit 1;
+$$;
+
+revoke all on function public.verify_partner_access_code(text) from public, anon, authenticated;
+grant execute on function public.verify_partner_access_code(text) to service_role;
 
 revoke all on table public.registrations from anon, authenticated, public;
 grant select on table public.registrations to authenticated;
@@ -70,7 +119,7 @@ values ('student-documents', 'student-documents', true, 1572864, array['applicat
 on conflict (id) do update
   set public = excluded.public,
       file_size_limit = excluded.file_size_limit,
-      allowed_mime_types = excluded.allowed_mime_types;
+  allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "Authenticated partners can upload student PDFs" on storage.objects;
 create policy "Authenticated partners can upload student PDFs"

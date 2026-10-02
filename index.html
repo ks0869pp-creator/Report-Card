@@ -337,16 +337,12 @@
     <form id="loginForm">
       <span class="eyebrow">Partner access</span>
       <h2>Log in</h2>
-      <p class="intro">Sign in with your partner account.</p>
+      <p class="intro">Enter the partner access code.</p>
       <div class="field">
-        <label for="partnerEmail">Email</label>
-        <input id="partnerEmail" name="partnerEmail" type="email" autocomplete="username" required>
+        <label for="partnerCode">Access code</label>
+        <input id="partnerCode" name="partnerCode" type="password" autocomplete="current-password" minlength="24" maxlength="256" required>
       </div>
-      <div class="field">
-        <label for="partnerPassword">Password</label>
-        <input id="partnerPassword" name="partnerPassword" type="password" autocomplete="current-password" required>
-      </div>
-      <button type="submit">Log in</button>
+      <button type="submit">Continue</button>
       <p class="login-message" id="loginMessage" aria-live="polite"></p>
       <button type="button" id="closeLogin" class="login-close">Close</button>
     </form>
@@ -549,13 +545,12 @@
 
     const loginDialog = document.getElementById('loginDialog');
     const loginForm = document.getElementById('loginForm');
-    const partnerEmail = document.getElementById('partnerEmail');
-    const partnerPassword = document.getElementById('partnerPassword');
+    const partnerCode = document.getElementById('partnerCode');
     const loginMessage = document.getElementById('loginMessage');
 
     document.getElementById('openLogin').addEventListener('click', () => {
       loginDialog.showModal();
-      partnerEmail.focus();
+      partnerCode.focus();
     });
 
     document.getElementById('closeLogin').addEventListener('click', () => {
@@ -568,16 +563,29 @@
         loginMessage.textContent = 'Supabase is not configured.';
         return;
       }
-      const { error } = await supabaseClient.auth.signInWithPassword({
-        email: partnerEmail.value.trim(),
-        password: partnerPassword.value
-      });
-      if (error) {
-        loginMessage.textContent = 'Sign-in failed. Check your email and password.';
+      loginMessage.classList.remove('error');
+      loginMessage.textContent = '';
+      try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/partner-code-login`, {
+          method: 'POST',
+          headers: {
+            apikey: supabasePublishableKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ code: partnerCode.value })
+        });
+        const result = await response.json();
+        if (response.status === 401) {
+          throw new Error('Invalid partner access code.');
+        }
+        if (!response.ok || typeof result.actionLink !== 'string') throw new Error();
+        window.location.href = result.actionLink;
+      } catch (error) {
+        loginMessage.textContent = error.message === 'Invalid partner access code.'
+          ? error.message
+          : 'Partner access is unavailable. Try again later.';
         loginMessage.classList.add('error');
-        return;
       }
-      window.location.href = 'support.html';
     });
 
     const chatPanel = document.getElementById('helpChat');
